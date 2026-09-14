@@ -5,18 +5,20 @@ plugins {
 }
 
 android {
+    def ciKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+    def ciKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    def ciKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+    def ciKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+    def hasCiSigning = [ciKeystorePath, ciKeystorePassword, ciKeyAlias, ciKeyPassword].every { it }
+
     signingConfigs {
-        debug {
-            storeFile file("../../keys/new.jks")
-            storePassword "123123"
-            keyAlias "key0"
-            keyPassword "123123"
-        }
-        release {
-            storeFile file("../../keys/new.jks")
-            storePassword "123123"
-            keyAlias "key0"
-            keyPassword "123123"
+        if (hasCiSigning) {
+            release {
+                storeFile file(ciKeystorePath)
+                storePassword ciKeystorePassword
+                keyAlias ciKeyAlias
+                keyPassword ciKeyPassword
+            }
         }
     }
     compileSdk 34
@@ -63,7 +65,7 @@ android {
             minifyEnabled false
 
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            signingConfig hasCiSigning ? signingConfigs.release : signingConfigs.debug
         }
         release {
             firebaseCrashlytics {
@@ -79,7 +81,7 @@ android {
             jniDebuggable false
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            signingConfig hasCiSigning ? signingConfigs.release : signingConfigs.debug
         }
         all{
             multiDexEnabled true

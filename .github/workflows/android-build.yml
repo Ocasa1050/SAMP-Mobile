@@ -1,0 +1,118 @@
+name: Android Linux build
+
+on:
+  push:
+    branches:
+      - GTA-2.10
+  pull_request:
+    branches:
+      - GTA-2.10
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Configure Git for Linux case sensitivity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config core.ignorecase false
+          python3 - <<'PY'
+          import subprocess
+          import sys
+          from collections import defaultdict
+
+          paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
+          paths = [path for path in paths if path]
+          grouped = defaultdict(list)
+          for path in paths:
+              grouped[path.casefold()].append(path)
+
+          collisions = [sorted(items) for items in grouped.values() if len(items) > 1]
+          if collisions:
+              print("Case-insensitive path collisions found:")
+              for items in collisions:
+                  for item in items:
+                      print(f"  {item}")
+              sys.exit(1)
+
+          print(f"Checked {len(paths)} tracked paths; no case collisions found.")
+          PY
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmake;3.22.1" \
+            "ndk;26.2.11394342"
+
+      - name: Set up temporary CI signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair \
+            -v \
+            -keystore "$RUNNER_TEMP/samp-mobile-ci.jks" \
+            -storepass "samp-mobile-ci" \
+            -alias "samp-mobile-ci" \
+            -keypass "samp-mobile-ci" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 1 \
+            -dname "CN=SA-MP Mobile CI, OU=Build, O=SA-MP Mobile, L=CI, S=CI, C=US"
+          {
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/samp-mobile-ci.jks"
+            echo "ANDROID_KEYSTORE_PASSWORD=samp-mobile-ci"
+            echo "ANDROID_KEY_ALIAS=samp-mobile-ci"
+            echo "ANDROID_KEY_PASSWORD=samp-mobile-ci"
+          } >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace clean assembleRelease
+
+      - name: List build outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          find app/build/outputs -type f \( -name "*.apk" -o -name "*.aab" \) -print
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: samp-mobile-gta-2.10-apk
+          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/**/*.apk
+            app/build/outputs/bundle/**/*.aab
