@@ -1,4 +1,5 @@
 #include <GLES2/gl2.h>
+#include <EGL/egl.h>
 #include "../main.h"
 #include "../vendor/armhook/patch.h"
 #include "game.h"
@@ -28,6 +29,17 @@
 #include "Renderer.h"
 #include "CrossHair.h"
 #include "World.h"
+#include "Widgets/TouchInterface.h"
+#include "CFPSFix.h"
+#include "ES2VertexBuffer.h"
+#include "RQ_Commands.h"
+#include "Pickups.h"
+#include "TimeCycle.h"
+#include "game/Pipelines/CustomCar/CustomCarEnvMapPipeline.h"
+#include "game/Pipelines/CustomBuilding/CustomBuildingDNPipeline.h"
+#include "COcclusion.h"
+#include "RealTimeShadowManager.h"
+#include "game/Widgets/WidgetGta.h"
 
 extern UI* pUI;
 extern CGame* pGame;
@@ -246,7 +258,6 @@ int CFileLoader__LoadObjectInstance_hook(stLoadObjectInstance *thiz) {
 	return CFileLoader__LoadObjectInstance(thiz);
 }
 
-extern int iBuildingToRemoveCount;
 extern std::list<REMOVE_BUILDING_DATA> RemoveBuildingData;
 void (*CEntity_Render)(CEntityGTA* pEntity);
 int g_iLastRenderedObject;
@@ -863,17 +874,6 @@ void CRenderer_RenderEverythingBarRoads_hook() {
 		}
 	}
 }
-
-#include "CFPSFix.h"
-#include "ES2VertexBuffer.h"
-#include "RQ_Commands.h"
-#include "Pickups.h"
-#include "TimeCycle.h"
-#include "game/Pipelines/CustomCar/CustomCarEnvMapPipeline.h"
-#include "game/Pipelines/CustomBuilding/CustomBuildingDNPipeline.h"
-#include "COcclusion.h"
-#include "RealTimeShadowManager.h"
-#include "game/Widgets/WidgetGta.h"
 
 CFPSFix g_fps;
 
@@ -1716,7 +1716,6 @@ int mpg123_param_hook(void* mh, int key, long val, int ZERO, double fval)
     return mpg123_param(mh, key, val | (0x2000 | 0x200 | 0x100 | 0x40), ZERO, fval);
 }
 
-#include "Widgets/TouchInterface.h"
 void InjectHooks()
 {
     FLog("InjectHooks");
@@ -1788,9 +1787,70 @@ void InjectHooks()
     CHook::Write(g_libGTASA+(VER_x32 ? 0xA45790:0xCE8538), &COcclusion::NumOccludersOnMap);
 }
 
+void InstallUrezHooks()
+{
+    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ));
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 12) = 'd';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 13) = 'x';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 14) = 't';
+
+    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F));
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 12) = 'd';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 13) = 'x';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 14) = 't';
+}
+
+void InstallCRHooks()
+{
+    struct TexturePathPatch
+    {
+        uintptr_t x32;
+        uintptr_t x64;
+        const char* oldExtension;
+    };
+
+    static const TexturePathPatch patches[] =
+    {
+        { 0x1E87A0, 0x714003, "pvr" }, // pvr.tmb
+        { 0x1E8C04, 0x71406F, "pvr" }, // pvr
+        { 0x1E878C, 0x714017, "etc" }, // etc.tmb
+        { 0x1E8BF4, 0x71407F, "etc" }, // etc
+        { 0x1E87F0, 0x713FB3, "unc" }, // unc.tmb
+    };
+
+    for (const auto& patch : patches)
+    {
+        uintptr_t address = g_libGTASA + (VER_x32 ? patch.x32 : patch.x64);
+        char* extension = reinterpret_cast<char*>(address + 12);
+
+        if (memcmp(extension, patch.oldExtension, 3) != 0)
+        {
+            FLog(
+                "Texture extension patch skipped: expected %s, got %.3s at %p",
+                patch.oldExtension,
+                extension,
+                reinterpret_cast<void*>(address)
+            );
+            continue;
+        }
+
+        CHook::UnFuck(address);
+
+        extension[0] = 'd';
+        extension[1] = 'x';
+        extension[2] = 't';
+
+        // FLog("Texture extension patched: %s -> dxt", patch.oldExtension);
+    }
+}
+
 void InstallSpecialHooks()
 {
     InjectHooks();
+
+    InstallUrezHooks();
+
+	//InstallCRHooks(); //call this when using the CRMP cache
 
     CHook::Redirect("_ZN5CGame20InitialiseRenderWareEv", &CGame::InitialiseRenderWare);
     CHook::InstallPLT(g_libGTASA + (VER_x32 ? 0x6785FC : 0x84EC20), &StartGameScreen__OnNewGameCheck_hook, &StartGameScreen__OnNewGameCheck);
@@ -1813,9 +1873,6 @@ void InstallSpecialHooks()
 	CHook::InlineHook("_Z32_rxOpenGLDefaultAllInOneRenderCBP10RwResEntryPvhj", &rxOpenGLDefaultAllInOneRenderCB_hook, &rxOpenGLDefaultAllInOneRenderCB);
 	CHook::InlineHook("_ZN25CCustomBuildingDNPipeline18CustomPipeRenderCBEP10RwResEntryPvhj", &CCustomBuildingDNPipeline__CustomPipeRenderCB_hook, &CCustomBuildingDNPipeline__CustomPipeRenderCB);
 }
-
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>   // If using OpenGL ES 2.0 or 3.0
 
 void InstallHooks()
 {
