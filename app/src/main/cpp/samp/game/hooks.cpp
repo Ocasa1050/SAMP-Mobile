@@ -1,5 +1,6 @@
 #include <GLES2/gl2.h>
 #include <EGL/egl.h>
+#include <cstring>
 #include "../main.h"
 #include "../vendor/armhook/patch.h"
 #include "game.h"
@@ -1787,8 +1788,68 @@ void InjectHooks()
     CHook::Write(g_libGTASA+(VER_x32 ? 0xA45790:0xCE8538), &COcclusion::NumOccludersOnMap);
 }
 
-void InstallUrezHooks()
+static const char* TextureFormatName(TextureDatabaseFormat format)
 {
+    switch (format)
+    {
+        case TextureDatabaseFormat::DF_DXT:
+            return "DXT";
+        case TextureDatabaseFormat::DF_ETC:
+            return "ETC";
+        case TextureDatabaseFormat::DF_PVR:
+            return "PVR";
+        default:
+            return "unknown";
+    }
+}
+
+static TextureDatabaseFormat DetectTextureDatabaseFormat()
+{
+    const auto* extensionString = glGetString(GL_EXTENSIONS);
+    if (!extensionString)
+    {
+        FLog("Texture format detection failed: GL_EXTENSIONS is unavailable");
+        return TextureDatabaseFormat::DF_Default;
+    }
+
+    const auto* extensions = reinterpret_cast<const char*>(extensionString);
+    if (strstr(extensions, "GL_IMG_texture_compression_pvrtc"))
+    {
+        return TextureDatabaseFormat::DF_PVR;
+    }
+
+    if (strstr(extensions, "GL_EXT_texture_compression_dxt1") ||
+        strstr(extensions, "GL_EXT_texture_compression_s3tc") ||
+        strstr(extensions, "GL_AMD_compressed_ATC_texture"))
+    {
+        return TextureDatabaseFormat::DF_DXT;
+    }
+
+    return TextureDatabaseFormat::DF_ETC;
+}
+
+void InstallTextureFormatHooks()
+{
+    static bool installed = false;
+    if (installed)
+    {
+        return;
+    }
+    installed = true;
+
+    const auto detectedFormat = DetectTextureDatabaseFormat();
+    FLog("Detected texture format: %s", TextureFormatName(detectedFormat));
+
+    // The game already has native ETC and PVR paths. Only redirect the
+    // PVR path on DXT devices, which is the purpose of this legacy patch.
+    // In particular, do not redirect it on ETC devices: player/menu use
+    // DF_PVR in CGame::InitialiseRenderWare and must keep their PVR files.
+    if (detectedFormat != TextureDatabaseFormat::DF_DXT)
+    {
+        FLog("Keeping native texture database paths");
+        return;
+    }
+
     CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ));
     *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 12) = 'd';
     *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 13) = 'x';
@@ -1847,8 +1908,6 @@ void InstallCRHooks()
 void InstallSpecialHooks()
 {
     InjectHooks();
-
-    InstallUrezHooks();
 
 	//InstallCRHooks(); //call this when using the CRMP cache
 

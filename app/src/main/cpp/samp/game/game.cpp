@@ -57,6 +57,7 @@ CGame::~CGame()
 
 void ApplyGlobalPatches();
 void InstallHooks();
+void InstallTextureFormatHooks();
 void CGame::StartGame()
 {
 	FLog("Starting game..");
@@ -646,6 +647,7 @@ bool CGame::InitialiseRenderWare() {
 
     CTxdStore::Initialise();
     CVisibilityPlugins::Initialise();
+    InstallTextureFormatHooks();
 
 #if VER_SAMP
     TextureDatabaseRuntime::Load("mobile", false, TextureDatabaseFormat::DF_Default);
