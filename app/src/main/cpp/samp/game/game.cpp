@@ -59,6 +59,7 @@ void ApplyGlobalPatches();
 void InstallHooks();
 void InstallTextureFormatHooks();
 TextureDatabaseFormat GetDetectedTextureDatabaseFormat();
+void SetTextureDatabasePathFormat(TextureDatabaseFormat format);
 void CGame::StartGame()
 {
 	FLog("Starting game..");
@@ -657,8 +658,14 @@ bool CGame::InitialiseRenderWare() {
     TextureDatabaseRuntime::Load("gta3", false, textureDatabaseFormat);
     TextureDatabaseRuntime::Load("gta_int", false, textureDatabaseFormat);
     TextureDatabaseRuntime::Load("cutscene", false, textureDatabaseFormat);
+
+    // World databases follow the detected format. player/menu must keep
+    // their PVR data even though the shared native path templates are
+    // temporarily switched to ETC or DXT above.
+    SetTextureDatabasePathFormat(TextureDatabaseFormat::DF_PVR);
     TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
     TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
+    SetTextureDatabasePathFormat(textureDatabaseFormat);
 #else
     TextureDatabaseRuntime::Load("samp", false, textureDatabaseFormat);
     TextureDatabaseRuntime::Load("mobile", false, textureDatabaseFormat);

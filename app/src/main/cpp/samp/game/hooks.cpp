@@ -1905,6 +1905,73 @@ TextureDatabaseFormat GetDetectedTextureDatabaseFormat()
     return detectedFormat;
 }
 
+static const char* TextureDatabaseFormatExtension(TextureDatabaseFormat format)
+{
+    switch (format)
+    {
+        case TextureDatabaseFormat::DF_DXT:
+            return "dxt";
+        case TextureDatabaseFormat::DF_ETC:
+            return "etc";
+        case TextureDatabaseFormat::DF_PVR:
+            return "pvr";
+        default:
+            return nullptr;
+    }
+}
+
+void SetTextureDatabasePathFormat(TextureDatabaseFormat format)
+{
+    const char* extension = TextureDatabaseFormatExtension(format);
+    if (!extension)
+    {
+        FLog("Texture database path format unchanged: %s", TextureFormatName(format));
+        return;
+    }
+
+    struct TexturePathPatch
+    {
+        uintptr_t x32;
+        uintptr_t x64;
+    };
+
+    // These are the two native database path templates used by
+    // TextureDatabaseRuntime::Load. The extension starts at +12.
+    static const TexturePathPatch paths[] =
+    {
+        { 0x1E87A0, 0x714003 },
+        { 0x1E8C04, 0x71406F },
+    };
+
+    for (const auto& path : paths)
+    {
+        const uintptr_t address = g_libGTASA + (VER_x32 ? path.x32 : path.x64);
+        char* currentExtension = reinterpret_cast<char*>(address + 12);
+
+        if (memcmp(currentExtension, extension, 3) == 0)
+        {
+            continue;
+        }
+
+        if (memcmp(currentExtension, "pvr", 3) != 0 &&
+            memcmp(currentExtension, "etc", 3) != 0 &&
+            memcmp(currentExtension, "dxt", 3) != 0)
+        {
+            FLog(
+                "Texture database path patch skipped: unexpected extension %.3s at %p",
+                currentExtension,
+                reinterpret_cast<void*>(address)
+            );
+            continue;
+        }
+
+        CHook::UnFuck(address);
+        memcpy(currentExtension, extension, 3);
+    }
+
+    FLog("Texture database paths set to %s", extension);
+}
+
 void InstallTextureFormatHooks()
 {
     static bool installed = false;
@@ -1917,25 +1984,14 @@ void InstallTextureFormatHooks()
     const auto detectedFormat = GetDetectedTextureDatabaseFormat();
     FLog("Detected texture format: %s", TextureFormatName(detectedFormat));
 
-    // The game already has native ETC and PVR paths. Only redirect the
-    // PVR path on DXT devices, which is the purpose of this legacy patch.
-    // In particular, do not redirect it on ETC devices: player/menu use
-    // DF_PVR in CGame::InitialiseRenderWare and must keep their PVR files.
-    if (detectedFormat != TextureDatabaseFormat::DF_DXT)
+    if (detectedFormat == TextureDatabaseFormat::DF_ETC ||
+        detectedFormat == TextureDatabaseFormat::DF_DXT)
     {
-        FLog("Keeping native texture database paths");
+        SetTextureDatabasePathFormat(detectedFormat);
         return;
     }
 
-    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ));
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 12) = 'd';
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 13) = 'x';
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 14) = 't';
-
-    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F));
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 12) = 'd';
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 13) = 'x';
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 14) = 't';
+    FLog("Texture database paths unchanged for format %s", TextureFormatName(detectedFormat));
 }
 
 void InstallCRHooks()
