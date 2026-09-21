@@ -1867,8 +1867,12 @@ static TextureDatabaseFormat DetectTextureDatabaseFormat()
 
     if (!versionString)
     {
-        FLog("Texture format detection failed: no current OpenGL context");
-        return TextureDatabaseFormat::DF_Default;
+        // CGame::InitialiseRenderWare can run before the EGL context is
+        // created. This GTA-2.10 package ships ETC world databases for
+        // devices that reach this path, so do not fall back to DF_Default:
+        // force the ETC database selection instead.
+        FLog("No current OpenGL context; forcing ETC texture database");
+        return TextureDatabaseFormat::DF_ETC;
     }
 
     if (HasTextureExtension("GL_IMG_texture_compression_pvrtc"))
