@@ -1,4 +1,4 @@
-#include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include <EGL/egl.h>
 #include <cstring>
 #include "../main.h"
@@ -1803,29 +1803,102 @@ static const char* TextureFormatName(TextureDatabaseFormat format)
     }
 }
 
+static bool HasExtensionToken(const char* extensions, const char* extension)
+{
+    if (!extensions || !extension)
+    {
+        return false;
+    }
+
+    const size_t extensionLength = strlen(extension);
+    const char* current = extensions;
+    while ((current = strstr(current, extension)) != nullptr)
+    {
+        const bool startsAtToken =
+            current == extensions || current[-1] == ' ';
+        const char following = current[extensionLength];
+        const bool endsAtToken = following == '\0' || following == ' ';
+
+        if (startsAtToken && endsAtToken)
+        {
+            return true;
+        }
+
+        current += extensionLength;
+    }
+
+    return false;
+}
+
+static bool HasTextureExtension(const char* extension)
+{
+    const auto* versionString = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    if (versionString && strstr(versionString, "OpenGL ES 3"))
+    {
+        GLint extensionCount = 0;
+        glGetIntegerv(GL_NUM_EXTENSIONS, &extensionCount);
+        for (GLint index = 0; index < extensionCount; ++index)
+        {
+            const auto* extensionString = reinterpret_cast<const char*>(
+                glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(index))
+            );
+            if (extensionString && strcmp(extensionString, extension) == 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    const auto* extensionString = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+    return HasExtensionToken(extensionString, extension);
+}
+
 static TextureDatabaseFormat DetectTextureDatabaseFormat()
 {
-    const auto* extensionString = glGetString(GL_EXTENSIONS);
-    if (!extensionString)
+    const auto* versionString = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    const auto* rendererString = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    FLog(
+        "OpenGL texture detection: version=%s renderer=%s",
+        versionString ? versionString : "unknown",
+        rendererString ? rendererString : "unknown"
+    );
+
+    if (!versionString)
     {
-        FLog("Texture format detection failed: GL_EXTENSIONS is unavailable");
+        FLog("Texture format detection failed: no current OpenGL context");
         return TextureDatabaseFormat::DF_Default;
     }
 
-    const auto* extensions = reinterpret_cast<const char*>(extensionString);
-    if (strstr(extensions, "GL_IMG_texture_compression_pvrtc"))
+    if (HasTextureExtension("GL_IMG_texture_compression_pvrtc"))
     {
         return TextureDatabaseFormat::DF_PVR;
     }
 
-    if (strstr(extensions, "GL_EXT_texture_compression_dxt1") ||
-        strstr(extensions, "GL_EXT_texture_compression_s3tc") ||
-        strstr(extensions, "GL_AMD_compressed_ATC_texture"))
+    if (HasTextureExtension("GL_EXT_texture_compression_dxt1") ||
+        HasTextureExtension("GL_EXT_texture_compression_s3tc") ||
+        HasTextureExtension("GL_AMD_compressed_ATC_texture"))
     {
         return TextureDatabaseFormat::DF_DXT;
     }
 
+    // ETC2 is core in OpenGL ES 3.0. ETC1 is exposed as an extension on
+    // older contexts; Android's launcher uses the same ETC fallback.
     return TextureDatabaseFormat::DF_ETC;
+}
+
+TextureDatabaseFormat GetDetectedTextureDatabaseFormat()
+{
+    static TextureDatabaseFormat detectedFormat = TextureDatabaseFormat::DF_Default;
+    static bool detected = false;
+    if (!detected)
+    {
+        detectedFormat = DetectTextureDatabaseFormat();
+        detected = true;
+    }
+
+    return detectedFormat;
 }
 
 void InstallTextureFormatHooks()
@@ -1837,7 +1910,7 @@ void InstallTextureFormatHooks()
     }
     installed = true;
 
-    const auto detectedFormat = DetectTextureDatabaseFormat();
+    const auto detectedFormat = GetDetectedTextureDatabaseFormat();
     FLog("Detected texture format: %s", TextureFormatName(detectedFormat));
 
     // The game already has native ETC and PVR paths. Only redirect the
