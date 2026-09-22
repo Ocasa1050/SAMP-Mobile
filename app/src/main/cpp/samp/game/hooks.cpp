@@ -1366,6 +1366,13 @@ static bool UsePvrForPlayerAndMenu(char* filePath)
         return true;
     }
 
+    extension = strstr(filePath, ".etc.toc");
+    if (extension && extension[8] == '\0')
+    {
+        memcpy(extension, ".pvr.toc", 8);
+        return true;
+    }
+
     extension = strstr(filePath, ".etc");
     if (extension && extension[4] == '\0')
     {
