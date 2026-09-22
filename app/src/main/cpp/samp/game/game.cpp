@@ -671,8 +671,13 @@ bool CGame::InitialiseRenderWare() {
     TextureDatabaseRuntime::Load("txd", false, textureDatabaseFormat);
     TextureDatabaseRuntime::Load("gta3", false, textureDatabaseFormat);
     TextureDatabaseRuntime::Load("gta_int", false, textureDatabaseFormat);
+
+    // player/menu remain PVR in this build too. The path templates are
+    // shared with the world databases, so switch them for these loads.
+    SetTextureDatabasePathFormat(TextureDatabaseFormat::DF_PVR);
     TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
     TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
+    SetTextureDatabasePathFormat(textureDatabaseFormat);
     //TextureDatabaseRuntime::Load("cutscene", false, TextureDatabaseFormat::DF_Default);
 
     /*TextureDatabaseRuntime* radar = TextureDatabaseRuntime::Load("radar", false, TextureDatabaseFormat::DF_ETC);
