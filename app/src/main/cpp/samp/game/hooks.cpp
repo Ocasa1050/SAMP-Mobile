@@ -1331,77 +1331,125 @@ struct stFile
 
 char lastFile[123];
 
+static bool IsPvrTextureDatabase(const char* filePath)
+{
+    const char* database = strstr(filePath, "texdb/");
+    if (!database)
+    {
+        return false;
+    }
+
+    database += strlen("texdb/");
+
+    return !strncmp(database, "player/", 7)
+        || !strncmp(database, "menu/", 5);
+}
+
+static bool UsePvrForPlayerAndMenu(char* filePath)
+{
+    if (!IsPvrTextureDatabase(filePath))
+    {
+        return false;
+    }
+
+    char* extension = strstr(filePath, ".etc.tmb");
+    if (extension && extension[8] == '\0')
+    {
+        memcpy(extension, ".pvr.tmb", 8);
+        return true;
+    }
+
+    extension = strstr(filePath, ".etc");
+    if (extension && extension[4] == '\0')
+    {
+        memcpy(extension, ".pvr", 4);
+        return true;
+    }
+
+    return false;
+}
+
 stFile* NvFOpen(const char* r0, const char* r1, int r2, int r3)
 {
-    strcpy(lastFile, r1);
+    static char requestedFile[255]{};
+    snprintf(requestedFile, sizeof(requestedFile), "%s", r1);
+
+    const bool usesPvrOverride = UsePvrForPlayerAndMenu(requestedFile);
+    strncpy(lastFile, requestedFile, sizeof(lastFile) - 1);
+    lastFile[sizeof(lastFile) - 1] = '\0';
 
     static char path[255]{};
     memset(path, 0, sizeof(path));
 
-    sprintf(path, "%s%s", g_pszStorage, r1);
+    sprintf(path, "%s%s", g_pszStorage, requestedFile);
+
+    if (usesPvrOverride)
+    {
+        FLog("Texture format override: %s -> %s", r1, requestedFile);
+    }
 
     // ----------------------------
-    if(!strncmp(r1+12, "mainV1.scm", 10))
+    if(!strncmp(requestedFile+12, "mainV1.scm", 10))
     {
         sprintf(path, "%sSAMP/main.scm", g_pszStorage);
         FLog("Loading %s", path);
     }
     // ----------------------------
-    if(!strncmp(r1+12, "SCRIPTV1.IMG", 12))
+    if(!strncmp(requestedFile+12, "SCRIPTV1.IMG", 12))
     {
         sprintf(path, "%sSAMP/script.img", g_pszStorage);
         FLog("Loading script.img..");
     }
     // ----------------------------
-    if(!strncmp(r1, "DATA/PEDS.IDE", 13))
+    if(!strncmp(requestedFile, "DATA/PEDS.IDE", 13))
     {
         sprintf(path, "%sSAMP/peds.ide", g_pszStorage);
         FLog("Loading peds.ide..");
     }
     // ----------------------------
-    if(!strncmp(r1, "DATA/VEHICLES.IDE", 17))
+    if(!strncmp(requestedFile, "DATA/VEHICLES.IDE", 17))
     {
         sprintf(path, "%sSAMP/vehicles.ide", g_pszStorage);
         FLog("Loading vehicles.ide..");
     }
 
-    if (!strncmp(r1, "DATA/GTA.DAT", 12))
+    if (!strncmp(requestedFile, "DATA/GTA.DAT", 12))
     {
         sprintf(path, "%sSAMP/gta.dat", g_pszStorage);
         FLog("Loading gta.dat..");
     }
 
-    if (!strncmp(r1, "DATA/HANDLING.CFG", 17))
+    if (!strncmp(requestedFile, "DATA/HANDLING.CFG", 17))
     {
         sprintf(path, "%sSAMP/handling.cfg", g_pszStorage);
         FLog("Loading handling.cfg..");
     }
 
-    if (!strncmp(r1, "DATA/WEAPON.DAT", 15))
+    if (!strncmp(requestedFile, "DATA/WEAPON.DAT", 15))
     {
         sprintf(path, "%sSAMP/weapon.dat", g_pszStorage);
         FLog("Loading weapon.dat..");
     }
 
-    if (!strncmp(r1, "DATA/FONTS.DAT", 15))
+    if (!strncmp(requestedFile, "DATA/FONTS.DAT", 15))
     {
         sprintf(path, "%sdata/fonts.dat", g_pszStorage);
         FLog("Loading fonts.dat..");
     }
 
-    if (!strncmp(r1, "DATA/PEDSTATS.DAT", 15))
+    if (!strncmp(requestedFile, "DATA/PEDSTATS.DAT", 15))
     {
         sprintf(path, "%sdata/pedstats.dat", g_pszStorage);
         FLog("Loading pedstats.dat..");
     }
 
-    if (!strncmp(r1, "DATA/TIMECYC.DAT", 15))
+    if (!strncmp(requestedFile, "DATA/TIMECYC.DAT", 15))
     {
         sprintf(path, "%sdata/timecyc.dat", g_pszStorage);
         FLog("Loading timecyc.dat..");
     }
 
-    if (!strncmp(r1, "DATA/POPCYCLE.DAT", 15))
+    if (!strncmp(requestedFile, "DATA/POPCYCLE.DAT", 15))
     {
         sprintf(path, "%sdata/popcycle.dat", g_pszStorage);
         FLog("Loading popcycle.dat..");
