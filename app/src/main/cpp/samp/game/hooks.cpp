@@ -1,6 +1,5 @@
-#include <GLES3/gl3.h>
+#include <GLES2/gl2.h>
 #include <EGL/egl.h>
-#include <cstring>
 #include "../main.h"
 #include "../vendor/armhook/patch.h"
 #include "game.h"
@@ -1788,210 +1787,17 @@ void InjectHooks()
     CHook::Write(g_libGTASA+(VER_x32 ? 0xA45790:0xCE8538), &COcclusion::NumOccludersOnMap);
 }
 
-static const char* TextureFormatName(TextureDatabaseFormat format)
+void InstallUrezHooks()
 {
-    switch (format)
-    {
-        case TextureDatabaseFormat::DF_DXT:
-            return "DXT";
-        case TextureDatabaseFormat::DF_ETC:
-            return "ETC";
-        case TextureDatabaseFormat::DF_PVR:
-            return "PVR";
-        default:
-            return "unknown";
-    }
-}
+    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ));
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 12) = 'e';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 13) = 't';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 14) = 'c';
 
-static bool HasExtensionToken(const char* extensions, const char* extension)
-{
-    if (!extensions || !extension)
-    {
-        return false;
-    }
-
-    const size_t extensionLength = strlen(extension);
-    const char* current = extensions;
-    while ((current = strstr(current, extension)) != nullptr)
-    {
-        const bool startsAtToken =
-            current == extensions || current[-1] == ' ';
-        const char following = current[extensionLength];
-        const bool endsAtToken = following == '\0' || following == ' ';
-
-        if (startsAtToken && endsAtToken)
-        {
-            return true;
-        }
-
-        current += extensionLength;
-    }
-
-    return false;
-}
-
-static bool HasTextureExtension(const char* extension)
-{
-    const auto* versionString = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-    if (versionString && strstr(versionString, "OpenGL ES 3"))
-    {
-        GLint extensionCount = 0;
-        glGetIntegerv(GL_NUM_EXTENSIONS, &extensionCount);
-        for (GLint index = 0; index < extensionCount; ++index)
-        {
-            const auto* extensionString = reinterpret_cast<const char*>(
-                glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(index))
-            );
-            if (extensionString && strcmp(extensionString, extension) == 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    const auto* extensionString = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
-    return HasExtensionToken(extensionString, extension);
-}
-
-static TextureDatabaseFormat DetectTextureDatabaseFormat()
-{
-    const auto* versionString = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-    const auto* rendererString = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-    FLog(
-        "OpenGL texture detection: version=%s renderer=%s",
-        versionString ? versionString : "unknown",
-        rendererString ? rendererString : "unknown"
-    );
-
-    if (!versionString)
-    {
-        // CGame::InitialiseRenderWare can run before the EGL context is
-        // created. This GTA-2.10 package ships ETC world databases for
-        // devices that reach this path, so do not fall back to DF_Default:
-        // force the ETC database selection instead.
-        FLog("No current OpenGL context; forcing ETC texture database");
-        return TextureDatabaseFormat::DF_ETC;
-    }
-
-    if (HasTextureExtension("GL_IMG_texture_compression_pvrtc"))
-    {
-        return TextureDatabaseFormat::DF_PVR;
-    }
-
-    if (HasTextureExtension("GL_EXT_texture_compression_dxt1") ||
-        HasTextureExtension("GL_EXT_texture_compression_s3tc") ||
-        HasTextureExtension("GL_AMD_compressed_ATC_texture"))
-    {
-        return TextureDatabaseFormat::DF_DXT;
-    }
-
-    // ETC2 is core in OpenGL ES 3.0. ETC1 is exposed as an extension on
-    // older contexts; Android's launcher uses the same ETC fallback.
-    return TextureDatabaseFormat::DF_ETC;
-}
-
-TextureDatabaseFormat GetDetectedTextureDatabaseFormat()
-{
-    static TextureDatabaseFormat detectedFormat = TextureDatabaseFormat::DF_Default;
-    static bool detected = false;
-    if (!detected)
-    {
-        detectedFormat = DetectTextureDatabaseFormat();
-        detected = true;
-    }
-
-    return detectedFormat;
-}
-
-static const char* TextureDatabaseFormatExtension(TextureDatabaseFormat format)
-{
-    switch (format)
-    {
-        case TextureDatabaseFormat::DF_DXT:
-            return "dxt";
-        case TextureDatabaseFormat::DF_ETC:
-            return "etc";
-        case TextureDatabaseFormat::DF_PVR:
-            return "pvr";
-        default:
-            return nullptr;
-    }
-}
-
-void SetTextureDatabasePathFormat(TextureDatabaseFormat format)
-{
-    const char* extension = TextureDatabaseFormatExtension(format);
-    if (!extension)
-    {
-        FLog("Texture database path format unchanged: %s", TextureFormatName(format));
-        return;
-    }
-
-    struct TexturePathPatch
-    {
-        uintptr_t x32;
-        uintptr_t x64;
-    };
-
-    // These are the two native database path templates used by
-    // TextureDatabaseRuntime::Load. The extension starts at +12.
-    static const TexturePathPatch paths[] =
-    {
-        { 0x1E87A0, 0x714003 },
-        { 0x1E8C04, 0x71406F },
-    };
-
-    for (const auto& path : paths)
-    {
-        const uintptr_t address = g_libGTASA + (VER_x32 ? path.x32 : path.x64);
-        char* currentExtension = reinterpret_cast<char*>(address + 12);
-
-        if (memcmp(currentExtension, extension, 3) == 0)
-        {
-            continue;
-        }
-
-        if (memcmp(currentExtension, "pvr", 3) != 0 &&
-            memcmp(currentExtension, "etc", 3) != 0 &&
-            memcmp(currentExtension, "dxt", 3) != 0)
-        {
-            FLog(
-                "Texture database path patch skipped: unexpected extension %.3s at %p",
-                currentExtension,
-                reinterpret_cast<void*>(address)
-            );
-            continue;
-        }
-
-        CHook::UnFuck(address);
-        memcpy(currentExtension, extension, 3);
-    }
-
-    FLog("Texture database paths set to %s", extension);
-}
-
-void InstallTextureFormatHooks()
-{
-    static bool installed = false;
-    if (installed)
-    {
-        return;
-    }
-    installed = true;
-
-    const auto detectedFormat = GetDetectedTextureDatabaseFormat();
-    FLog("Detected texture format: %s", TextureFormatName(detectedFormat));
-
-    if (detectedFormat == TextureDatabaseFormat::DF_ETC ||
-        detectedFormat == TextureDatabaseFormat::DF_DXT)
-    {
-        SetTextureDatabasePathFormat(detectedFormat);
-        return;
-    }
-
-    FLog("Texture database paths unchanged for format %s", TextureFormatName(detectedFormat));
+    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F));
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 12) = 'e';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 13) = 't';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 14) = 'c';
 }
 
 void InstallCRHooks()
@@ -2030,9 +1836,9 @@ void InstallCRHooks()
 
         CHook::UnFuck(address);
 
-        extension[0] = 'd';
-        extension[1] = 'x';
-        extension[2] = 't';
+        extension[0] = 'p';
+        extension[1] = 'v';
+        extension[2] = 'r';
 
         // FLog("Texture extension patched: %s -> dxt", patch.oldExtension);
     }
@@ -2041,6 +1847,8 @@ void InstallCRHooks()
 void InstallSpecialHooks()
 {
     InjectHooks();
+
+    InstallUrezHooks();
 
 	//InstallCRHooks(); //call this when using the CRMP cache
 
