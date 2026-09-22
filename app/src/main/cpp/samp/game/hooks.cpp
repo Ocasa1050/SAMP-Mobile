@@ -1345,39 +1345,51 @@ static bool IsPvrTextureDatabase(const char* filePath)
         || !strncmp(database, "menu/", 5);
 }
 
-static bool UsePvrForPlayerAndMenu(char* filePath)
+static bool ReplaceTextureDatabaseExtension(
+    char* filePath,
+    const char* oldExtension,
+    const char* newExtension
+)
 {
-    if (!IsPvrTextureDatabase(filePath))
+    char* extension = strstr(filePath, oldExtension);
+    const size_t oldLength = strlen(oldExtension);
+
+    if (!extension || extension[oldLength] != '\0')
     {
         return false;
     }
 
-    char* extension = strstr(filePath, ".etc.tmb");
-    if (extension && extension[8] == '\0')
+    memcpy(extension, newExtension, strlen(newExtension) + 1);
+    return true;
+}
+
+static bool SelectTextureDatabaseFormat(char* filePath)
+{
+    if (!strstr(filePath, "texdb/"))
     {
-        memcpy(extension, ".pvr.tmb", 8);
-        return true;
+        return false;
     }
 
-    extension = strstr(filePath, ".etc.dat");
-    if (extension && extension[8] == '\0')
-    {
-        memcpy(extension, ".pvr.dat", 8);
-        return true;
-    }
+    const bool usePvr = IsPvrTextureDatabase(filePath);
+    const char* oldExtensions[] = {
+        usePvr ? ".etc.tmb" : ".pvr.tmb",
+        usePvr ? ".etc.dat" : ".pvr.dat",
+        usePvr ? ".etc.toc" : ".pvr.toc",
+        usePvr ? ".etc" : ".pvr"
+    };
+    const char* newExtensions[] = {
+        usePvr ? ".pvr.tmb" : ".etc.tmb",
+        usePvr ? ".pvr.dat" : ".etc.dat",
+        usePvr ? ".pvr.toc" : ".etc.toc",
+        usePvr ? ".pvr" : ".etc"
+    };
 
-    extension = strstr(filePath, ".etc.toc");
-    if (extension && extension[8] == '\0')
+    for (size_t i = 0; i < sizeof(oldExtensions) / sizeof(oldExtensions[0]); ++i)
     {
-        memcpy(extension, ".pvr.toc", 8);
-        return true;
-    }
-
-    extension = strstr(filePath, ".etc");
-    if (extension && extension[4] == '\0')
-    {
-        memcpy(extension, ".pvr", 4);
-        return true;
+        if (ReplaceTextureDatabaseExtension(filePath, oldExtensions[i], newExtensions[i]))
+        {
+            return true;
+        }
     }
 
     return false;
@@ -1388,7 +1400,7 @@ stFile* NvFOpen(const char* r0, const char* r1, int r2, int r3)
     static char requestedFile[255]{};
     snprintf(requestedFile, sizeof(requestedFile), "%s", r1);
 
-    const bool usesPvrOverride = UsePvrForPlayerAndMenu(requestedFile);
+    const bool formatOverride = SelectTextureDatabaseFormat(requestedFile);
     strncpy(lastFile, requestedFile, sizeof(lastFile) - 1);
     lastFile[sizeof(lastFile) - 1] = '\0';
 
@@ -1397,7 +1409,7 @@ stFile* NvFOpen(const char* r0, const char* r1, int r2, int r3)
 
     sprintf(path, "%s%s", g_pszStorage, requestedFile);
 
-    if (usesPvrOverride)
+    if (formatOverride)
     {
         FLog("Texture format override: %s -> %s", r1, requestedFile);
     }
