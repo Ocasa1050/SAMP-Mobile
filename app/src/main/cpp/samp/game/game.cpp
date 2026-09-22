@@ -659,11 +659,12 @@ bool CGame::InitialiseRenderWare() {
     TextureDatabaseRuntime::Load("gta_int", false, textureDatabaseFormat);
     TextureDatabaseRuntime::Load("cutscene", false, textureDatabaseFormat);
 
-    // This package provides the player/menu databases as ETC as well.
-    // Keep the same format for every database instead of making the
-    // shared path templates request missing *.pvr.tmb files.
-    TextureDatabaseRuntime::Load("player", false, textureDatabaseFormat);
-    TextureDatabaseRuntime::Load("menu", false, textureDatabaseFormat);
+    // player/menu remain PVR. The native path templates are shared, so
+    // switch them only for these two loads and restore the world format.
+    SetTextureDatabasePathFormat(TextureDatabaseFormat::DF_PVR);
+    TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
+    TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
+    SetTextureDatabasePathFormat(textureDatabaseFormat);
 #else
     TextureDatabaseRuntime::Load("samp", false, textureDatabaseFormat);
     TextureDatabaseRuntime::Load("mobile", false, textureDatabaseFormat);
