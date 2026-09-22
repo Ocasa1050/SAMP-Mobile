@@ -57,6 +57,9 @@ CGame::~CGame()
 
 void ApplyGlobalPatches();
 void InstallHooks();
+void InstallTextureFormatHooks();
+TextureDatabaseFormat GetDetectedTextureDatabaseFormat();
+void SetTextureDatabasePathFormat(TextureDatabaseFormat format);
 void CGame::StartGame()
 {
 	FLog("Starting game..");
@@ -646,21 +649,29 @@ bool CGame::InitialiseRenderWare() {
 
     CTxdStore::Initialise();
     CVisibilityPlugins::Initialise();
+    InstallTextureFormatHooks();
+    const auto textureDatabaseFormat = GetDetectedTextureDatabaseFormat();
 
 #if VER_SAMP
-    TextureDatabaseRuntime::Load("mobile", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("txd", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("gta3", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("gta_int", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("cutscene", false, TextureDatabaseFormat::DF_Default);
+    TextureDatabaseRuntime::Load("mobile", false, textureDatabaseFormat);
+    TextureDatabaseRuntime::Load("txd", false, textureDatabaseFormat);
+    TextureDatabaseRuntime::Load("gta3", false, textureDatabaseFormat);
+    TextureDatabaseRuntime::Load("gta_int", false, textureDatabaseFormat);
+    TextureDatabaseRuntime::Load("cutscene", false, textureDatabaseFormat);
+
+    // World databases follow the detected format. player/menu must keep
+    // their PVR data even though the shared native path templates are
+    // temporarily switched to ETC or DXT above.
+    SetTextureDatabasePathFormat(TextureDatabaseFormat::DF_PVR);
     TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
     TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
+    SetTextureDatabasePathFormat(textureDatabaseFormat);
 #else
-    TextureDatabaseRuntime::Load("samp", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("mobile", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("txd", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("gta3", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("gta_int", false, TextureDatabaseFormat::DF_Default);
+    TextureDatabaseRuntime::Load("samp", false, textureDatabaseFormat);
+    TextureDatabaseRuntime::Load("mobile", false, textureDatabaseFormat);
+    TextureDatabaseRuntime::Load("txd", false, textureDatabaseFormat);
+    TextureDatabaseRuntime::Load("gta3", false, textureDatabaseFormat);
+    TextureDatabaseRuntime::Load("gta_int", false, textureDatabaseFormat);
     TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
     TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
     //TextureDatabaseRuntime::Load("cutscene", false, TextureDatabaseFormat::DF_Default);
