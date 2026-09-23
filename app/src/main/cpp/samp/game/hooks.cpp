@@ -1331,76 +1331,11 @@ struct stFile
 
 char lastFile[123];
 
-static bool IsPvrTextureDatabase(const char* filePath)
-{
-    const char* database = strstr(filePath, "texdb/");
-    if (!database)
-    {
-        return false;
-    }
-
-    database += strlen("texdb/");
-
-    return !strncmp(database, "player/", 7)
-        || !strncmp(database, "menu/", 5);
-}
-
-static bool ReplaceTextureDatabaseExtension(
-    char* filePath,
-    const char* oldExtension,
-    const char* newExtension
-)
-{
-    char* extension = strstr(filePath, oldExtension);
-    const size_t oldLength = strlen(oldExtension);
-
-    if (!extension || extension[oldLength] != '\0')
-    {
-        return false;
-    }
-
-    memcpy(extension, newExtension, strlen(newExtension) + 1);
-    return true;
-}
-
-static bool SelectTextureDatabaseFormat(char* filePath)
-{
-    if (!strstr(filePath, "texdb/"))
-    {
-        return false;
-    }
-
-    const bool usePvr = IsPvrTextureDatabase(filePath);
-    const char* oldExtensions[] = {
-        usePvr ? ".etc.tmb" : ".pvr.tmb",
-        usePvr ? ".etc.dat" : ".pvr.dat",
-        usePvr ? ".etc.toc" : ".pvr.toc",
-        usePvr ? ".etc" : ".pvr"
-    };
-    const char* newExtensions[] = {
-        usePvr ? ".pvr.tmb" : ".etc.tmb",
-        usePvr ? ".pvr.dat" : ".etc.dat",
-        usePvr ? ".pvr.toc" : ".etc.toc",
-        usePvr ? ".pvr" : ".etc"
-    };
-
-    for (size_t i = 0; i < sizeof(oldExtensions) / sizeof(oldExtensions[0]); ++i)
-    {
-        if (ReplaceTextureDatabaseExtension(filePath, oldExtensions[i], newExtensions[i]))
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 stFile* NvFOpen(const char* r0, const char* r1, int r2, int r3)
 {
     static char requestedFile[255]{};
     snprintf(requestedFile, sizeof(requestedFile), "%s", r1);
 
-    const bool formatOverride = SelectTextureDatabaseFormat(requestedFile);
     strncpy(lastFile, requestedFile, sizeof(lastFile) - 1);
     lastFile[sizeof(lastFile) - 1] = '\0';
 
@@ -1408,11 +1343,6 @@ stFile* NvFOpen(const char* r0, const char* r1, int r2, int r3)
     memset(path, 0, sizeof(path));
 
     sprintf(path, "%s%s", g_pszStorage, requestedFile);
-
-    if (formatOverride)
-    {
-        FLog("Texture format override: %s -> %s", r1, requestedFile);
-    }
 
     // ----------------------------
     if(!strncmp(requestedFile+12, "mainV1.scm", 10))
@@ -1674,64 +1604,6 @@ bool RwResourcesFreeResEntry_hook(void* entry)
     return result;
 }
 
-static uint32_t dwRLEDecompressSourceSize = 0;
-
-size_t (*OS_FileRead)(OSFile a1, void *buffer, size_t numBytes);
-size_t OS_FileRead_hook(OSFile a1, void *buffer, size_t numBytes)
-{
-    dwRLEDecompressSourceSize = numBytes;
-
-    return OS_FileRead(a1, buffer, numBytes);
-}
-
-void (*RLEDecompress)(uint8_t* pDest, size_t uiDestSize, uint8_t const* pSrc, size_t uiSegSize, uint32_t uiEscape);
-void RLEDecompress_hook(uint8_t* pDest, size_t uiDestSize, const uint8_t* pSrc, size_t uiSegSize, uint32_t uiEscape) {
-
-    if (!pDest || !pSrc || uiDestSize == 0 || uiSegSize == 0) {
-        // Обработка некорректных входных данных или размеров
-        // Здесь можно сгенерировать исключение или вернуть код ошибки
-        return;
-    }
-
-    const uint8_t* pTempSrc = pSrc;
-    const uint8_t* const pEndOfDest = pDest + uiDestSize;
-    const uint8_t* const pEndOfSrc = pSrc + dwRLEDecompressSourceSize; // Предполагается, что dwRLEDecompressSourceSize определено правильно
-
-    try {
-        while (pDest < pEndOfDest && pTempSrc < pEndOfSrc) {
-            if (*pTempSrc == uiEscape) {
-                if (pTempSrc + 1 >= pEndOfSrc || pTempSrc[1] == 0 || pTempSrc + 2 + uiSegSize > pEndOfSrc) {
-                    // Обработка ошибки, неверное значение ucCurSeg или недостаточно данных в исходном буфере
-                    throw std::runtime_error("rled error 1");
-                }
-
-                uint8_t ucCurSeg = pTempSrc[1];
-                while (ucCurSeg--) {
-                    if (pDest + uiSegSize > pEndOfDest) {
-                        // Обработка ошибки, недостаточно места в целевом буфере
-                        throw std::runtime_error("rled error 2");
-                    }
-                    memcpy(pDest, pTempSrc + 2, uiSegSize);
-                    pDest += uiSegSize;
-                }
-                pTempSrc += 2 + uiSegSize;
-            } else {
-                if (pDest + uiSegSize > pEndOfDest || pTempSrc + uiSegSize > pEndOfSrc) {
-                    // Обработка ошибки, недостаточно данных в исходном буфере или недостаточно места в целевом буфере
-                    throw std::runtime_error("rled error 3");
-                }
-                memcpy(pDest, pTempSrc, uiSegSize);
-                pDest += uiSegSize;
-                pTempSrc += uiSegSize;
-            }
-        }
-
-        dwRLEDecompressSourceSize = 0;
-    } catch (const std::exception& e) {
-        FLog("%s", e.what());
-    }
-}
-
 void (*CGame_Process)();
 void CGame_Process_hook()
 {
@@ -1861,19 +1733,6 @@ void InjectHooks()
     CHook::Write(g_libGTASA+(VER_x32 ? 0xA45790:0xCE8538), &COcclusion::NumOccludersOnMap);
 }
 
-void InstallUrezHooks()
-{
-    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ));
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 12) = 'e';
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 13) = 't';
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 14) = 'c';
-
-    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F));
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 12) = 'e';
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 13) = 't';
-    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 14) = 'c';
-}
-
 void InstallCRHooks()
 {
     struct TexturePathPatch
@@ -1922,8 +1781,6 @@ void InstallSpecialHooks()
 {
     InjectHooks();
 
-    InstallUrezHooks();
-
 	//InstallCRHooks(); //call this when using the CRMP cache
 
     CHook::Redirect("_ZN5CGame20InitialiseRenderWareEv", &CGame::InitialiseRenderWare);
@@ -1939,10 +1796,6 @@ void InstallSpecialHooks()
     CHook::InlineHook("_ZN14MainMenuScreen6UpdateEf", &MainMenuScreen__Update_hook, &MainMenuScreen__Update);
 
     CHook::RET("_ZN4CPed31RemoveWeaponWhenEnteringVehicleEi"); // CPed::RemoveWeaponWhenEnteringVehicle
-
-    CHook::InstallPLT(g_libGTASA + (VER_x32 ? 0x6701D4 : 0x840708), &RLEDecompress_hook, &RLEDecompress);
-
-    CHook::InlineHook("_Z11OS_FileReadPvS_i", &OS_FileRead_hook, &OS_FileRead);
 
 	CHook::InlineHook("_Z32_rxOpenGLDefaultAllInOneRenderCBP10RwResEntryPvhj", &rxOpenGLDefaultAllInOneRenderCB_hook, &rxOpenGLDefaultAllInOneRenderCB);
 	CHook::InlineHook("_ZN25CCustomBuildingDNPipeline18CustomPipeRenderCBEP10RwResEntryPvhj", &CCustomBuildingDNPipeline__CustomPipeRenderCB_hook, &CCustomBuildingDNPipeline__CustomPipeRenderCB);

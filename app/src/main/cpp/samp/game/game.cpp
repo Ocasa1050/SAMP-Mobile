@@ -13,6 +13,7 @@
 #include "Pickups.h"
 #include "game/Models/ModelInfo.h"
 #include "game/Collision/Collision.h"
+#include <GLES2/gl2.h>
 
 void ApplySAMPPatchesInGame();
 void InitScripting();
@@ -22,6 +23,42 @@ bool bUsedPlayerSlots[PLAYER_PED_SLOTS];
 uint16_t *szGameTextMessage;
 
 bool CGame::bIsGameExiting = false;
+
+static TextureDatabaseFormat DetectTextureDatabaseFormat()
+{
+    const char* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+    const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+
+    TextureDatabaseFormat format = TextureDatabaseFormat::DF_ETC;
+    const char* formatName = "ETC";
+
+    if (extensions && strstr(extensions, "GL_IMG_texture_compression_pvrtc"))
+    {
+        format = TextureDatabaseFormat::DF_PVR;
+        formatName = "PVR";
+    }
+    else if (
+        extensions
+        && (
+            strstr(extensions, "GL_EXT_texture_compression_dxt1")
+            || strstr(extensions, "GL_EXT_texture_compression_s3tc")
+            || strstr(extensions, "GL_AMD_compressed_ATC_texture")
+            || strstr(extensions, "GL_ATI_texture_compression_atitc")
+        )
+    )
+    {
+        format = TextureDatabaseFormat::DF_DXT;
+        formatName = "DXT";
+    }
+
+    FLog(
+        "Texture database format: %s (renderer: %s)",
+        formatName,
+        renderer ? renderer : "unknown"
+    );
+
+    return format;
+}
 
 inline int FindFirstFreePlayerPedSlot()
 {
@@ -647,23 +684,25 @@ bool CGame::InitialiseRenderWare() {
     CTxdStore::Initialise();
     CVisibilityPlugins::Initialise();
 
+    const TextureDatabaseFormat textureFormat = DetectTextureDatabaseFormat();
+
 #if VER_SAMP
-    TextureDatabaseRuntime::Load("mobile", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("txd", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("gta3", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("gta_int", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("cutscene", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
-    TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
+    TextureDatabaseRuntime::Load("mobile", false, textureFormat);
+    TextureDatabaseRuntime::Load("txd", false, textureFormat);
+    TextureDatabaseRuntime::Load("gta3", false, textureFormat);
+    TextureDatabaseRuntime::Load("gta_int", false, textureFormat);
+    TextureDatabaseRuntime::Load("cutscene", false, textureFormat);
+    TextureDatabaseRuntime::Load("player", false, textureFormat);
+    TextureDatabaseRuntime::Load("menu", false, textureFormat);
 #else
-    TextureDatabaseRuntime::Load("samp", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("mobile", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("txd", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("gta3", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("gta_int", false, TextureDatabaseFormat::DF_Default);
-    TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
-    TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
-    //TextureDatabaseRuntime::Load("cutscene", false, TextureDatabaseFormat::DF_Default);
+    TextureDatabaseRuntime::Load("samp", false, textureFormat);
+    TextureDatabaseRuntime::Load("mobile", false, textureFormat);
+    TextureDatabaseRuntime::Load("txd", false, textureFormat);
+    TextureDatabaseRuntime::Load("gta3", false, textureFormat);
+    TextureDatabaseRuntime::Load("gta_int", false, textureFormat);
+    TextureDatabaseRuntime::Load("player", false, textureFormat);
+    TextureDatabaseRuntime::Load("menu", false, textureFormat);
+    //TextureDatabaseRuntime::Load("cutscene", false, textureFormat);
 
     /*TextureDatabaseRuntime* radar = TextureDatabaseRuntime::Load("radar", false, TextureDatabaseFormat::DF_ETC);
     TextureDatabaseRuntime::Register(radar);

@@ -113,19 +113,23 @@ public class SplashActivity extends AppCompatActivity {
                 @Override
                 public void onSurfaceCreated(GL10 gl10, EGLConfig eglConfig) {
                     UpdateActivity.eGPUType egputype;
-                    String glGetString = gl10.glGetString(GL10.GL_EXTENSIONS);
-                    String glGetString2 = gl10.glGetString(GL10.GL_EXTENSIONS);
-                    if (glGetString2.contains("GL_IMG_texture_compression_pvrtc")) {
+                    String glRenderer = gl10.glGetString(GL10.GL_RENDERER);
+                    String glExtensions = gl10.glGetString(GL10.GL_EXTENSIONS);
+                    if (glExtensions != null && glExtensions.contains("GL_IMG_texture_compression_pvrtc")) {
                         egputype = UpdateActivity.eGPUType.PVR;
                         mGpuType = 3;
-                    } else if (glGetString2.contains("GL_EXT_texture_compression_dxt1") || glGetString2.contains("GL_EXT_texture_compression_s3tc") || glGetString2.contains("GL_AMD_compressed_ATC_texture")) {
+                    } else if (glExtensions != null && (glExtensions.contains("GL_EXT_texture_compression_dxt1")
+                            || glExtensions.contains("GL_EXT_texture_compression_s3tc")
+                            || glExtensions.contains("GL_AMD_compressed_ATC_texture")
+                            || glExtensions.contains("GL_ATI_texture_compression_atitc"))) {
                         egputype = UpdateActivity.eGPUType.DXT;
                         mGpuType = 1;
                     } else {
                         egputype = UpdateActivity.eGPUType.ETC;
                         mGpuType = 2;
                     }
-                    Log.e("x1y2z", "GPU name: " + glGetString);
+                    Log.e("x1y2z", "GPU name: " + glRenderer);
+                    Log.e("x1y2z", "GPU extensions: " + glExtensions);
                     Log.e("x1y2z", "GPU type: " + egputype.name());
 
                     if (isPermissionsGranted()) {
