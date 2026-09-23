@@ -692,16 +692,20 @@ bool CGame::InitialiseRenderWare() {
     TextureDatabaseRuntime::Load("gta3", false, textureFormat);
     TextureDatabaseRuntime::Load("gta_int", false, textureFormat);
     TextureDatabaseRuntime::Load("cutscene", false, textureFormat);
-    TextureDatabaseRuntime::Load("player", false, textureFormat);
-    TextureDatabaseRuntime::Load("menu", false, textureFormat);
+    // The distributed player/menu databases are PVR-only. Do not make the
+    // loader look for player.etc.* or menu.etc.* when the device is ETC.
+    TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
+    TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
 #else
     TextureDatabaseRuntime::Load("samp", false, textureFormat);
     TextureDatabaseRuntime::Load("mobile", false, textureFormat);
     TextureDatabaseRuntime::Load("txd", false, textureFormat);
     TextureDatabaseRuntime::Load("gta3", false, textureFormat);
     TextureDatabaseRuntime::Load("gta_int", false, textureFormat);
-    TextureDatabaseRuntime::Load("player", false, textureFormat);
-    TextureDatabaseRuntime::Load("menu", false, textureFormat);
+    // The distributed player/menu databases are PVR-only. Do not make the
+    // loader look for player.etc.* or menu.etc.* when the device is ETC.
+    TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
+    TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
     //TextureDatabaseRuntime::Load("cutscene", false, textureFormat);
 
     /*TextureDatabaseRuntime* radar = TextureDatabaseRuntime::Load("radar", false, TextureDatabaseFormat::DF_ETC);

@@ -258,7 +258,13 @@ public class UpdateService extends Service {
                             String str = getExternalFilesDir(null) + "/";
                             File file = new File(str + fileData.getPath());
                             if (!file.exists() || file.length() != fileData.getSize()) {
-                                if(!fileData.getPath().contains("player") && !fileData.getPath().contains("playerhi") && !fileData.getPath().contains("menu") && !fileData.getPath().contains("samp")) {
+                                boolean fixedPvrDatabase = fileData.getPath().contains("player")
+                                        || fileData.getPath().contains("playerhi")
+                                        || fileData.getPath().contains("menu");
+                                if (fixedPvrDatabase && !fileData.getPath().contains(".pvr.")) {
+                                    continue;
+                                }
+                                if(!fixedPvrDatabase && !fileData.getPath().contains("samp")) {
                                     if ((fileData.getPath().contains(".dxt.") && mGpuType != 1))
                                         continue;
                                     else if ((fileData.getPath().contains(".etc.") && mGpuType != 2))
