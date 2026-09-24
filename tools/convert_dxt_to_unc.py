@@ -354,9 +354,9 @@ def _convert_record(
         return _pack_record(header, _rle_decompress(payload, 4, rle_indicator)) if rle_indicator else _pack_record(header, payload)
 
     # In these Android databases the high height bit is set when the record
-    # contains the full mip chain. This matches the game's record writer:
-    # clear means one level, set means levels continue down to 1x1.
-    has_mips = bool(height_mask & 0x8000)
+    # contains one level only. A clear high bit means the record contains the
+    # full mip chain down to 1x1.
+    has_mips = not bool(height_mask & 0x8000)
     rgba = _decode_dxt_payload(
         payload,
         encoding,
