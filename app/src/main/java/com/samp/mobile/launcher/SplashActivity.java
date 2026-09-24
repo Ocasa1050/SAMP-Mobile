@@ -125,7 +125,7 @@ public class SplashActivity extends AppCompatActivity {
                         egputype = UpdateActivity.eGPUType.DXT;
                         mGpuType = 1;
                     } else {
-                        egputype = UpdateActivity.eGPUType.ETC;
+                        egputype = UpdateActivity.eGPUType.UNC;
                         mGpuType = 2;
                     }
                     Log.e("x1y2z", "GPU name: " + glRenderer);

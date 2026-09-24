@@ -29,8 +29,11 @@ static TextureDatabaseFormat DetectTextureDatabaseFormat()
     const char* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
     const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
 
-    TextureDatabaseFormat format = TextureDatabaseFormat::DF_ETC;
-    const char* formatName = "ETC";
+    // ETC1 cannot preserve the alpha channel used by the DXT5 databases.
+    // The Mali fallback is therefore an alpha-safe UNC database generated
+    // from the original DXT files, not a renamed or RGB-only ETC database.
+    TextureDatabaseFormat format = TextureDatabaseFormat::DF_UNC;
+    const char* formatName = "UNC";
 
     if (extensions && strstr(extensions, "GL_IMG_texture_compression_pvrtc"))
     {
@@ -692,20 +695,16 @@ bool CGame::InitialiseRenderWare() {
     TextureDatabaseRuntime::Load("gta3", false, textureFormat);
     TextureDatabaseRuntime::Load("gta_int", false, textureFormat);
     TextureDatabaseRuntime::Load("cutscene", false, textureFormat);
-    // The distributed player/menu databases are PVR-only. Do not make the
-    // loader look for player.etc.* or menu.etc.* when the device is ETC.
-    TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
-    TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
+    TextureDatabaseRuntime::Load("player", false, textureFormat);
+    TextureDatabaseRuntime::Load("menu", false, textureFormat);
 #else
     TextureDatabaseRuntime::Load("samp", false, textureFormat);
     TextureDatabaseRuntime::Load("mobile", false, textureFormat);
     TextureDatabaseRuntime::Load("txd", false, textureFormat);
     TextureDatabaseRuntime::Load("gta3", false, textureFormat);
     TextureDatabaseRuntime::Load("gta_int", false, textureFormat);
-    // The distributed player/menu databases are PVR-only. Do not make the
-    // loader look for player.etc.* or menu.etc.* when the device is ETC.
-    TextureDatabaseRuntime::Load("player", false, TextureDatabaseFormat::DF_PVR);
-    TextureDatabaseRuntime::Load("menu", false, TextureDatabaseFormat::DF_PVR);
+    TextureDatabaseRuntime::Load("player", false, textureFormat);
+    TextureDatabaseRuntime::Load("menu", false, textureFormat);
     //TextureDatabaseRuntime::Load("cutscene", false, textureFormat);
 
     /*TextureDatabaseRuntime* radar = TextureDatabaseRuntime::Load("radar", false, TextureDatabaseFormat::DF_ETC);

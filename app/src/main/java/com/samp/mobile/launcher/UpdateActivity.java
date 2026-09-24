@@ -73,7 +73,7 @@ public class UpdateActivity extends AppCompatActivity{
     public enum eGPUType {
         DXT,
         PVR,
-        ETC
+        UNC
     }
 
     class IncomingHandler extends Handler {
@@ -232,7 +232,7 @@ public class UpdateActivity extends AppCompatActivity{
                     egputype = eGPUType.DXT;
                     mGpuType = 1;
                 } else {
-                    egputype = eGPUType.ETC;
+                    egputype = eGPUType.UNC;
                     mGpuType = 2;
                 }
                 Log.e("x1y2z", "GPU name: " + glRenderer);
