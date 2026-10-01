@@ -96,7 +96,7 @@ jobs:
             echo "ANDROID_KEY_ALIAS=samp-mobile-ci"
             echo "ANDROID_KEY_PASSWORD=samp-mobile-ci"
           } >> "$GITHUB_ENV"
-
+ 
       - name: Build release APK
         shell: bash
         run: |
