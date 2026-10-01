@@ -1,5 +1,4 @@
 #include <GLES2/gl2.h>
-#include <EGL/egl.h>
 #include "../main.h"
 #include "../vendor/armhook/patch.h"
 #include "game.h"
@@ -29,17 +28,6 @@
 #include "Renderer.h"
 #include "CrossHair.h"
 #include "World.h"
-#include "Widgets/TouchInterface.h"
-#include "CFPSFix.h"
-#include "ES2VertexBuffer.h"
-#include "RQ_Commands.h"
-#include "Pickups.h"
-#include "TimeCycle.h"
-#include "game/Pipelines/CustomCar/CustomCarEnvMapPipeline.h"
-#include "game/Pipelines/CustomBuilding/CustomBuildingDNPipeline.h"
-#include "COcclusion.h"
-#include "RealTimeShadowManager.h"
-#include "game/Widgets/WidgetGta.h"
 
 extern UI* pUI;
 extern CGame* pGame;
@@ -258,6 +246,7 @@ int CFileLoader__LoadObjectInstance_hook(stLoadObjectInstance *thiz) {
 	return CFileLoader__LoadObjectInstance(thiz);
 }
 
+extern int iBuildingToRemoveCount;
 extern std::list<REMOVE_BUILDING_DATA> RemoveBuildingData;
 void (*CEntity_Render)(CEntityGTA* pEntity);
 int g_iLastRenderedObject;
@@ -875,6 +864,17 @@ void CRenderer_RenderEverythingBarRoads_hook() {
 	}
 }
 
+#include "CFPSFix.h"
+#include "ES2VertexBuffer.h"
+#include "RQ_Commands.h"
+#include "Pickups.h"
+#include "TimeCycle.h"
+#include "game/Pipelines/CustomCar/CustomCarEnvMapPipeline.h"
+#include "game/Pipelines/CustomBuilding/CustomBuildingDNPipeline.h"
+#include "COcclusion.h"
+#include "RealTimeShadowManager.h"
+#include "game/Widgets/WidgetGta.h"
+
 CFPSFix g_fps;
 
 void (*ANDRunThread)(void* a1);
@@ -1333,79 +1333,75 @@ char lastFile[123];
 
 stFile* NvFOpen(const char* r0, const char* r1, int r2, int r3)
 {
-    static char requestedFile[255]{};
-    snprintf(requestedFile, sizeof(requestedFile), "%s", r1);
-
-    strncpy(lastFile, requestedFile, sizeof(lastFile) - 1);
-    lastFile[sizeof(lastFile) - 1] = '\0';
+    strcpy(lastFile, r1);
 
     static char path[255]{};
     memset(path, 0, sizeof(path));
 
-    sprintf(path, "%s%s", g_pszStorage, requestedFile);
+    sprintf(path, "%s%s", g_pszStorage, r1);
 
     // ----------------------------
-    if(!strncmp(requestedFile+12, "mainV1.scm", 10))
+    if(!strncmp(r1+12, "mainV1.scm", 10))
     {
         sprintf(path, "%sSAMP/main.scm", g_pszStorage);
         FLog("Loading %s", path);
     }
     // ----------------------------
-    if(!strncmp(requestedFile+12, "SCRIPTV1.IMG", 12))
+    if(!strncmp(r1+12, "SCRIPTV1.IMG", 12))
     {
         sprintf(path, "%sSAMP/script.img", g_pszStorage);
         FLog("Loading script.img..");
     }
     // ----------------------------
-    if(!strncmp(requestedFile, "DATA/PEDS.IDE", 13))
+    if(!strncmp(r1, "DATA/PEDS.IDE", 13))
     {
         sprintf(path, "%sSAMP/peds.ide", g_pszStorage);
         FLog("Loading peds.ide..");
     }
     // ----------------------------
-    if(!strncmp(requestedFile, "DATA/VEHICLES.IDE", 17))
+    if(!strncmp(r1, "DATA/VEHICLES.IDE", 17))
     {
         sprintf(path, "%sSAMP/vehicles.ide", g_pszStorage);
         FLog("Loading vehicles.ide..");
     }
 
-    if (!strncmp(requestedFile, "DATA/GTA.DAT", 12))
+    if (!strncmp(r1, "DATA/GTA.DAT", 12))
     {
         sprintf(path, "%sSAMP/gta.dat", g_pszStorage);
         FLog("Loading gta.dat..");
     }
 
-    if (!strncmp(requestedFile, "DATA/HANDLING.CFG", 17))
+    if (!strncmp(r1, "DATA/HANDLING.CFG", 17))
     {
         sprintf(path, "%sSAMP/handling.cfg", g_pszStorage);
         FLog("Loading handling.cfg..");
     }
 
-    if (!strncmp(requestedFile, "DATA/WEAPON.DAT", 15))
+    if (!strncmp(r1, "DATA/WEAPON.DAT", 15))
     {
         sprintf(path, "%sSAMP/weapon.dat", g_pszStorage);
         FLog("Loading weapon.dat..");
     }
 
-    if (!strncmp(requestedFile, "DATA/FONTS.DAT", 15))
+    if (!strncmp(r1, "DATA/FONTS.DAT", 15))
     {
         sprintf(path, "%sdata/fonts.dat", g_pszStorage);
         FLog("Loading fonts.dat..");
     }
 
-    if (!strncmp(requestedFile, "DATA/PEDSTATS.DAT", 15))
+    if (!strncmp(r1, "DATA/PEDSTATS.DAT", 15))
     {
         sprintf(path, "%sdata/pedstats.dat", g_pszStorage);
         FLog("Loading pedstats.dat..");
     }
 
-    if (!strncmp(requestedFile, "DATA/TIMECYC.DAT", 15))
+    if (!strncmp(r1, "DATA/TIMECYC.DAT", 15))
     {
         sprintf(path, "%sdata/timecyc.dat", g_pszStorage);
         FLog("Loading timecyc.dat..");
     }
 
-    if (!strncmp(requestedFile, "DATA/POPCYCLE.DAT", 15))
+    if (!strncmp(r1, "DATA/POPCYCLE.DAT", 15))
     {
         sprintf(path, "%sdata/popcycle.dat", g_pszStorage);
         FLog("Loading popcycle.dat..");
@@ -1604,6 +1600,64 @@ bool RwResourcesFreeResEntry_hook(void* entry)
     return result;
 }
 
+static uint32_t dwRLEDecompressSourceSize = 0;
+
+size_t (*OS_FileRead)(OSFile a1, void *buffer, size_t numBytes);
+size_t OS_FileRead_hook(OSFile a1, void *buffer, size_t numBytes)
+{
+    dwRLEDecompressSourceSize = numBytes;
+
+    return OS_FileRead(a1, buffer, numBytes);
+}
+
+void (*RLEDecompress)(uint8_t* pDest, size_t uiDestSize, uint8_t const* pSrc, size_t uiSegSize, uint32_t uiEscape);
+void RLEDecompress_hook(uint8_t* pDest, size_t uiDestSize, const uint8_t* pSrc, size_t uiSegSize, uint32_t uiEscape) {
+
+    if (!pDest || !pSrc || uiDestSize == 0 || uiSegSize == 0) {
+        // Обработка некорректных входных данных или размеров
+        // Здесь можно сгенерировать исключение или вернуть код ошибки
+        return;
+    }
+
+    const uint8_t* pTempSrc = pSrc;
+    const uint8_t* const pEndOfDest = pDest + uiDestSize;
+    const uint8_t* const pEndOfSrc = pSrc + dwRLEDecompressSourceSize; // Предполагается, что dwRLEDecompressSourceSize определено правильно
+
+    try {
+        while (pDest < pEndOfDest && pTempSrc < pEndOfSrc) {
+            if (*pTempSrc == uiEscape) {
+                if (pTempSrc + 1 >= pEndOfSrc || pTempSrc[1] == 0 || pTempSrc + 2 + uiSegSize > pEndOfSrc) {
+                    // Обработка ошибки, неверное значение ucCurSeg или недостаточно данных в исходном буфере
+                    throw std::runtime_error("rled error 1");
+                }
+
+                uint8_t ucCurSeg = pTempSrc[1];
+                while (ucCurSeg--) {
+                    if (pDest + uiSegSize > pEndOfDest) {
+                        // Обработка ошибки, недостаточно места в целевом буфере
+                        throw std::runtime_error("rled error 2");
+                    }
+                    memcpy(pDest, pTempSrc + 2, uiSegSize);
+                    pDest += uiSegSize;
+                }
+                pTempSrc += 2 + uiSegSize;
+            } else {
+                if (pDest + uiSegSize > pEndOfDest || pTempSrc + uiSegSize > pEndOfSrc) {
+                    // Обработка ошибки, недостаточно данных в исходном буфере или недостаточно места в целевом буфере
+                    throw std::runtime_error("rled error 3");
+                }
+                memcpy(pDest, pTempSrc, uiSegSize);
+                pDest += uiSegSize;
+                pTempSrc += uiSegSize;
+            }
+        }
+
+        dwRLEDecompressSourceSize = 0;
+    } catch (const std::exception& e) {
+        FLog("%s", e.what());
+    }
+}
+
 void (*CGame_Process)();
 void CGame_Process_hook()
 {
@@ -1662,6 +1716,7 @@ int mpg123_param_hook(void* mh, int key, long val, int ZERO, double fval)
     return mpg123_param(mh, key, val | (0x2000 | 0x200 | 0x100 | 0x40), ZERO, fval);
 }
 
+#include "Widgets/TouchInterface.h"
 void InjectHooks()
 {
     FLog("InjectHooks");
@@ -1733,55 +1788,27 @@ void InjectHooks()
     CHook::Write(g_libGTASA+(VER_x32 ? 0xA45790:0xCE8538), &COcclusion::NumOccludersOnMap);
 }
 
-void InstallCRHooks()
+void InstallUrezHooks()
 {
-    struct TexturePathPatch
-    {
-        uintptr_t x32;
-        uintptr_t x64;
-        const char* oldExtension;
-    };
+    // DISABLED: these two patches forced the texture extension to "dxt".
+    /*
+    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ));
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 12) = 'd';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 13) = 'x';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E87A0 : 0x714003 ) + 14) = 't';
 
-    static const TexturePathPatch patches[] =
-    {
-        { 0x1E87A0, 0x714003, "pvr" }, // pvr.tmb
-        { 0x1E8C04, 0x71406F, "pvr" }, // pvr
-        { 0x1E878C, 0x714017, "etc" }, // etc.tmb
-        { 0x1E8BF4, 0x71407F, "etc" }, // etc
-        { 0x1E87F0, 0x713FB3, "unc" }, // unc.tmb
-    };
-
-    for (const auto& patch : patches)
-    {
-        uintptr_t address = g_libGTASA + (VER_x32 ? patch.x32 : patch.x64);
-        char* extension = reinterpret_cast<char*>(address + 12);
-
-        if (memcmp(extension, patch.oldExtension, 3) != 0)
-        {
-            FLog(
-                "Texture extension patch skipped: expected %s, got %.3s at %p",
-                patch.oldExtension,
-                extension,
-                reinterpret_cast<void*>(address)
-            );
-            continue;
-        }
-
-        CHook::UnFuck(address);
-
-        extension[0] = 'p';
-        extension[1] = 'v';
-        extension[2] = 'r';
-
-        // FLog("Texture extension patched: %s -> dxt", patch.oldExtension);
-    }
+    CHook::UnFuck(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F));
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 12) = 'd';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 13) = 'x';
+    *(char*)(g_libGTASA + (VER_x32 ? 0x1E8C04 : 0x71406F) + 14) = 't';
+    */
 }
 
 void InstallSpecialHooks()
 {
     InjectHooks();
 
-	//InstallCRHooks(); //call this when using the CRMP cache
+    InstallUrezHooks();
 
     CHook::Redirect("_ZN5CGame20InitialiseRenderWareEv", &CGame::InitialiseRenderWare);
     CHook::InstallPLT(g_libGTASA + (VER_x32 ? 0x6785FC : 0x84EC20), &StartGameScreen__OnNewGameCheck_hook, &StartGameScreen__OnNewGameCheck);
@@ -1797,9 +1824,16 @@ void InstallSpecialHooks()
 
     CHook::RET("_ZN4CPed31RemoveWeaponWhenEnteringVehicleEi"); // CPed::RemoveWeaponWhenEnteringVehicle
 
+    CHook::InstallPLT(g_libGTASA + (VER_x32 ? 0x6701D4 : 0x840708), &RLEDecompress_hook, &RLEDecompress);
+
+    CHook::InlineHook("_Z11OS_FileReadPvS_i", &OS_FileRead_hook, &OS_FileRead);
+
 	CHook::InlineHook("_Z32_rxOpenGLDefaultAllInOneRenderCBP10RwResEntryPvhj", &rxOpenGLDefaultAllInOneRenderCB_hook, &rxOpenGLDefaultAllInOneRenderCB);
 	CHook::InlineHook("_ZN25CCustomBuildingDNPipeline18CustomPipeRenderCBEP10RwResEntryPvhj", &CCustomBuildingDNPipeline__CustomPipeRenderCB_hook, &CCustomBuildingDNPipeline__CustomPipeRenderCB);
 }
+
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>   // If using OpenGL ES 2.0 or 3.0
 
 void InstallHooks()
 {
@@ -1838,10 +1872,16 @@ void InstallHooks()
     CHook::InlineHook("_ZN7CObject6RenderEv", &CObject_Render_hook, & CObject_Render);
 
     CHook::Redirect("_Z19PlayerIsEnteringCarv", &PlayerIsEnteringCar);
+
+    // DISABLED: this forced TextureListing::GetMipCount() to always return 1,
+    // which loads textures without mipmaps and causes shimmering / noisy
+    // grass, sidewalks and building textures. Disabled to restore mipmaps.
+    /*
     if(*(uint8_t *)(g_libGTASA + (VER_x32 ? 0x6B8B9C:0x896135)))
     {
         CHook::Redirect("_ZNK14TextureListing11GetMipCountEv", &getmip);
     }
+    */
 
     if (!eglGetProcAddress("glAlphaFuncQCOM")) {
         // If "glAlphaFuncQCOM" is not available, try "glAlphaFunc"
